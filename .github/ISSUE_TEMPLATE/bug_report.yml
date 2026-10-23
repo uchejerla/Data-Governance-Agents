@@ -1,0 +1,70 @@
+name: Bug report
+description: Something computes the wrong answer, renders wrongly, or breaks the backlog.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For a security issue, do not open an issue — follow [SECURITY.md](../SECURITY.md).
+        If the problem involves the seeded data, say which asset, rule or term you were looking at.
+
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened
+      description: What you saw, including the exact figure, severity, clause or message.
+      placeholder: Triage scored QR-04 as High but the rule text says it breaches the critical threshold.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Quality Triage
+        2. Select rule QR-04
+        3. Compare the severity with POL-QUAL-04 §3.2
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Browser, OS and Node version
+      placeholder: Firefox 131 on macOS 15, Node 22.12
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Catalog Curation
+        - Quality Triage
+        - Policy & Control Q&A
+        - Access Review
+        - Stewardship Plan
+        - Shared backlog (accept / dismiss / assign / undo)
+        - Decision history or CSV export
+        - Deployment, auth or build
+        - Documentation
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else
+      description: Console errors, network responses, or a screenshot.
+    validations:
+      required: false

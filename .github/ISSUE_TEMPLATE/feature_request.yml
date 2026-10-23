@@ -1,0 +1,50 @@
+name: Feature request
+description: Propose an assistant, a capability, or a packaging/deployment change.
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: The governance job that is hard today, in the words a steward would use.
+      placeholder: Stewards re-key approved definitions into Confluence because there is nowhere to publish the draft.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: The smallest change that would solve it. Outputs matter more than screens.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - New assistant
+        - Existing assistant behaviour
+        - Shared backlog or decision history
+        - Deployment, packaging or licensing
+        - Data connectors
+        - Documentation
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other ways this could be solved, including "do nothing".
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        **Before you file:** every assistant output must stay grounded in a clause or a catalog
+        fact, and the product never approves access or changes metadata on a human's behalf.
+        Proposals that invent a rule or act autonomously will be declined by design.

@@ -1,0 +1,12 @@
+# Public configuration for local development — no secrets.
+# Copy to .dev.vars (git-ignored) and fill in the development client id.
+# Deployed environments get these injected by the platform; never commit .dev.vars.
+
+FREEBUFF_CLIENT_ID=replace-with-development-client-id
+FREEBUFF_ISSUER=https://freebuff.com/oidc
+
+# The origin the Worker believes it is serving. Use http://localhost:8787 when you
+# open the Worker directly (`npm run dev:worker`). If you browse the Vite dev server
+# on http://localhost:3000, set this to that origin instead: same-origin write checks
+# and the sign-in callback both follow the browser's origin, not the proxy's target.
+APP_ORIGIN=http://localhost:8787
