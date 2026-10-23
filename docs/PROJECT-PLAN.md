@@ -19,7 +19,7 @@ already exists, and each is sized to land inside a week with a green gate.
 | Reasoning | Deterministic engines in `src/lib` over a bundled snapshot; no model, no network, no key |
 | Server | One Worker: OIDC session, `/api/decisions*`, `/api/licence`, D1 (`decisions`, `decision_events`) |
 | Licensing | Signed ES256 token, packages, expiry and audit-trail module enforced server-side; seats modelled, not enforced |
-| Tests | 99 tests in 9 files, including route-level gate and response-header tests and the constraint guard; CI runs the dependency audit, typecheck, tests and the floor guard on every push and pull request |
+| Tests | 117 tests in 12 files, including storage-contract, migration, route-gate and response-header tests and the constraint guard; CI runs the dependency audit, typecheck, tests and the floor guard on every push and pull request |
 | Docs | README, CONTRIBUTING, SECURITY, `agents/` specs, `docs/licensing.md`, issue and PR templates |
 
 **What is missing, ranked by how much it blocks revenue or trust**
@@ -108,7 +108,7 @@ than opening a second stream.
 | 2 | 2–6 Nov | **CP2** | Response headers (CSP, HSTS, frame-ancestors, nosniff, referrer), dependency audit gate, secret scan, CODEOWNERS, protected `main` | Header tests; audit gate green; a direct push to `main` is refused |
 | 3 | 9–13 Nov | **CP3** | Storage interface over D1, migration runner, health/version endpoints | The existing suite passes unchanged against the interface; migrations are idempotent |
 | 4 | 16–20 Nov | **CP4** | Node server target, Postgres adapter, Dockerfile + compose, session portability | `docker compose up` serves the app; decisions API parity proven by the route tests |
-| 5 | 23–27 Nov | **CP5** | `workspace_id` on decisions/events, query scoping, membership table, seat enforcement | Two workspaces cannot see each other's backlog (test); seat limit refuses the 16th member |
+| 5 | 23–27 Nov | **CP5** | `workspace_id` on decisions/events, query scoping, membership table, seat enforcement, **migration ledger** (the first `ALTER TABLE`, which is not re-runnable) | Two workspaces cannot see each other's backlog (test); seat limit refuses the 16th member |
 | 6 | 30 Nov–4 Dec | **CP6** | SSO per install: OIDC discovery, group → role map, admin settings | Sign-in against a local IdP; a role change takes effect on next request |
 | 7 | 7–11 Dec | **CP7** | Audit-log retention + subject export/erasure, rate limiting | Erasure removes a steward's rows and keeps the decision; limiter returns 429 under load |
 | 8 | 14–18 Dec | **CP8** | Connector v1 (CSV + one catalog API), read-only ingest, SSRF allowlist, feature flag | Ingest a fixture catalog; a blocked host is refused; flag off means no network |

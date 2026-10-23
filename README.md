@@ -110,6 +110,8 @@ server-side session cookie) and serves:
 | `PUT /api/decisions/:key` | Accept / dismiss / assign; same-origin only, validated, then upserted |
 | `DELETE /api/decisions/:key` | Withdraw your own decision (403 if someone else recorded it) |
 | `GET /api/licence` | The installation's entitlement: status, modules, seats and limits, or evaluation mode. Public, and carries no customer identity |
+| `GET /api/health` | `{ status, version, schema, database }`, 503 when the database cannot answer. Public, for a probe; names no binding, licence or customer |
+| `GET /api/version` | The build and the schema version it expects. Public; does not touch the database |
 
 Identity comes only from the verified session — no user id or email is ever accepted from the
 request body. Mutations must pass `isSameOriginRequest`, and personalised responses are
@@ -117,8 +119,16 @@ request body. Mutations must pass `isSameOriginRequest`, and personalised respon
 
 **Database.** D1 holds `decisions` (one row per recommendation: status, assignee, decided-by,
 decided-at, updated-by, updated-at) and an append-only `decision_events` log, so overwriting a
-decision never erases who decided what, when. The schema is created by the Worker on first use
-(`CREATE TABLE IF NOT EXISTS`), because a Worker gets a binding, not a SQL console.
+decision never erases who decided what, when.
+
+Every SQL statement lives behind `DecisionStore` ([`worker/storage.ts`](worker/storage.ts)); the
+routes never see a column name, and the D1-specific parts are the only code a different database
+has to replace. The schema is applied by the Worker on first use from ordered, idempotent
+migrations ([`worker/migrations.ts`](worker/migrations.ts)), one `batch()` — one transaction — per
+step, because a Worker gets a binding, not a SQL console. Re-running the list is a no-op, so a cold
+start, an install created before migrations existed, and a retry after a failed boot all converge
+on the same schema. A decision and its event are written in the same transaction: an event with no
+decision, or a decision with no event, would describe a state that never existed.
 
 **Client.** [`src/lib/decisions.ts`](src/lib/decisions.ts) applies changes optimistically,
 settles on the server's row, reverts and shows the server's reason if a write is refused,
@@ -141,7 +151,7 @@ neutralised.
 ## Testing
 
 ```bash
-npm test           # 99 tests, 9 files
+npm test           # 117 tests, 12 files
 npm run typecheck  # tsc -b --noEmit, covers app, config and Worker projects
 npm run check      # typecheck, tests and the constraint floor — what CI runs
 ```

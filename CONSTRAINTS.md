@@ -33,7 +33,7 @@ be read is reported whenever it moves.
 | Dimension | Rule | Checked by | Runs at |
 | --- | --- | --- | --- |
 | Types | Zero type errors, app + config + Worker | `npm run typecheck` (`tsc -b --noEmit`) | every edit, CI |
-| Tests | All tests pass, at least **99 in 9 files** | `npm test` (`vitest run`) | every edit, CI |
+| Tests | All tests pass, at least **117 in 12 files** | `npm test` (`vitest run`) | every edit, CI |
 | Floor | No move that lowers the bar | `npm run check:constraints` | every task, CI |
 | Worker gates | Licence, origin and auth enforcement covered | `worker/routes.test.ts` | every edit, CI |
 | Build | Production bundle builds | `npm run build` | checkpoint, CI |
@@ -48,7 +48,7 @@ Ratchet only: these must not get worse. Update the recorded value when it improv
 
 | Metric | Today (2026-10-23) | Direction |
 | --- | --- | --- |
-| Tests | 99 passing, 9 files | must not fall |
+| Tests | 117 passing, 12 files | must not fall |
 | Bundle, main JS | 390.73 kB (117.55 kB gzip) | must not grow without a stated reason |
 | Bundle, CSS | 22.38 kB (5.37 kB gzip) | must not grow without a stated reason |
 | Type coverage | `strict` on, zero `any` in `src/lib` at review time | must not regress |

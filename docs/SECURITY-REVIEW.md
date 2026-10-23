@@ -69,6 +69,10 @@ module gates are enforced server-side.
 - Runtime dependencies (`react`, `react-dom`, `@freebuff/auth`) carry no advisories; `npm audit --audit-level=high` now reports 0 across the tree.
 - Every response carries the security headers, including static assets and auth redirects, and unexpected errors are generic 500s.
 - Personalised responses are `Cache-Control: private, no-store`.
+- `/api/health` and `/api/version` are reachable signed out by design (a probe has no session) and
+  disclose only the app version, the schema id and whether the database answered — no binding
+  name, licence, customer or driver message. A failed probe returns 503 with a generic body
+  (`worker/health.test.ts`).
 - No secrets in the repository; `.dev.vars` is ignored and holds public configuration only.
 
 ---
