@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Agent assistants that help data stewards deliver governance and stewardship work.",
+  "engines": {
+    "node": ">=22.22.0"
+  },
   "scripts": {
     "dev": "vite",
     "dev:worker": "wrangler dev --port 8787",
@@ -11,6 +14,7 @@
     "build:worker": "wrangler deploy --dry-run --outdir=worker-build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
+    "pretest": "node scripts/check-node.mjs",
     "test": "vitest run",
     "check:constraints": "node scripts/check-constraints.mjs",
     "check": "npm run typecheck && npm test && npm run check:constraints",

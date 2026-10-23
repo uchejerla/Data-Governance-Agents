@@ -65,7 +65,7 @@ steward records about it.
 
 ## Quickstart
 
-Requires Node **≥ 22.22** (what the locked jsdom 30 needs) and npm.
+Requires Node **≥ 22.22** (what the locked jsdom 30 needs) and npm. [`.nvmrc`](.nvmrc) pins it — `nvm use` — and `npm test` refuses to start below the floor instead of failing inside undici.
 
 ```bash
 npm ci                 # install exactly what the lockfile pins

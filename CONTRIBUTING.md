@@ -5,7 +5,8 @@ change accepted is to keep it inside them.
 
 ## Setup
 
-Requires Node **≥ 22.22** and npm.
+Requires Node **≥ 22.22** and npm. [`.nvmrc`](.nvmrc) pins it, so `nvm use` is the quickest way
+there; `npm test` refuses to start below the floor rather than dying inside undici.
 
 ```bash
 npm ci                                  # exact dependencies from the lockfile
