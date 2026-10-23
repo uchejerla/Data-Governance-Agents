@@ -141,8 +141,9 @@ neutralised.
 ## Testing
 
 ```bash
-npm test           # 73 tests, 8 files
+npm test           # 81 tests, 9 files
 npm run typecheck  # tsc -b --noEmit, covers app, config and Worker projects
+npm run check      # typecheck, tests and the constraint floor — what CI runs
 ```
 
 | Layer | What the tests prove |
@@ -154,6 +155,7 @@ npm run typecheck  # tsc -b --noEmit, covers app, config and Worker projects
 | `src/components/render.test.tsx` | Every screen renders its expected content |
 | `worker/licence.test.ts` | Verification against real ES256 tokens: tampering, the wrong key, a key id the install does not hold, invalid claims, expiry, not-yet-valid, seat counting and nested tiers |
 | `worker/routes.test.ts` | Where the Worker applies it, with a stubbed session: a read-only install refuses writes before authentication, a foreign `Origin` is refused, a package without the audit trail gets a 403 on history, and the public entitlement carries no customer identity |
+| `scripts/check-constraints.test.mjs` | The guard itself, against throwaway repositories: a suppression, a stub, a skipped or deleted test, a disabled CI gate and a loosened threshold are all blocked, prose is exempt, and an unrunnable guard exits 2 rather than passing |
 
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs typecheck and tests on every
 push to `main` from a clean `npm ci`.

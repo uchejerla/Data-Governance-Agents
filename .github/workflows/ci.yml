@@ -3,18 +3,24 @@ name: CI
 on:
   push:
     branches: [main]
+  # The constraint floor is worth most before a merge, not after one.
+  pull_request:
 
 permissions:
   contents: read
 
 jobs:
   verify:
-    name: Typecheck and test
+    name: Typecheck, test and constraints
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Check out
         uses: actions/checkout@v4
+        with:
+          # The constraint guard diffs the branch against its merge base, which a
+          # shallow clone does not contain.
+          fetch-depth: 0
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -33,3 +39,8 @@ jobs:
 
       - name: Test
         run: npm test
+
+      - name: Constraints floor
+        # Blocks the cheap road to green: a new suppression, a skipped or deleted
+        # test, a disabled gate, or a loosened threshold in CONSTRAINTS.md.
+        run: node scripts/check-constraints.mjs --base origin/main

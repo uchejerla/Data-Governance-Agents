@@ -9,8 +9,7 @@
 ## How it was verified
 
 ```bash
-npm run typecheck
-npm test
+npm run check   # typecheck, tests and the constraint floor
 ```
 
 Manual steps, including the signed-out path:

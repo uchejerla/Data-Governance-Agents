@@ -1,5 +1,7 @@
 *.tsbuildinfo
 .DS_Store
+# Generated knowledge graph (graphify) — never committed
+graphify-out/
 .dev.vars
 .wrangler/
 dist/

@@ -12,6 +12,8 @@
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
+    "check:constraints": "node scripts/check-constraints.mjs",
+    "check": "npm run typecheck && npm test && npm run check:constraints",
     "licence:issue": "node scripts/issue-licence.mjs"
   },
   "dependencies": {

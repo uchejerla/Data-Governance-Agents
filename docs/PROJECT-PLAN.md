@@ -19,7 +19,7 @@ already exists, and each is sized to land inside a week with a green gate.
 | Reasoning | Deterministic engines in `src/lib` over a bundled snapshot; no model, no network, no key |
 | Server | One Worker: OIDC session, `/api/decisions*`, `/api/licence`, D1 (`decisions`, `decision_events`) |
 | Licensing | Signed ES256 token, packages, expiry and audit-trail module enforced server-side; seats modelled, not enforced |
-| Tests | 73 tests in 8 files, including route-level gate tests; CI runs typecheck and tests on every push to `main` |
+| Tests | 81 tests in 9 files, including route-level gate tests and the constraint guard; CI runs typecheck, tests and the floor guard on every push and pull request |
 | Docs | README, CONTRIBUTING, SECURITY, `agents/` specs, `docs/licensing.md`, issue and PR templates |
 
 **What is missing, ranked by how much it blocks revenue or trust**
