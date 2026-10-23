@@ -1694,3 +1694,68 @@ a {
   color: var(--accent);
   font-weight: 600;
 }
+
+/* ---------- Licensing ---------- */
+
+.licence-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 10px 32px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  border-bottom: 1px solid var(--line);
+}
+
+.licence-banner svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.licence-banner strong {
+  font-weight: 700;
+}
+
+.licence-banner-blocked {
+  background: var(--critical-soft);
+  color: var(--critical);
+  border-bottom-color: #eccfc9;
+}
+
+.licence-banner-warn {
+  background: var(--high-soft);
+  color: var(--high);
+  border-bottom-color: #eddec4;
+}
+
+.licence-foot {
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #8a9692;
+  padding: 0 6px;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.decision-readonly {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted);
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  border-radius: 999px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+.decision-bar-readonly {
+  background: var(--surface-2);
+}
+
+@media (max-width: 900px) {
+  .licence-banner {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}

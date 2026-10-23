@@ -11,7 +11,8 @@
     "build:worker": "wrangler deploy --dry-run --outdir=worker-build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "licence:issue": "node scripts/issue-licence.mjs"
   },
   "dependencies": {
     "@freebuff/auth": "^0.1.0",

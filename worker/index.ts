@@ -1,5 +1,6 @@
 import { createFreebuffAuth, isSameOriginRequest } from '@freebuff/auth';
 import type { FreebuffAuth, FreebuffUser } from '@freebuff/auth';
+import { evaluateLicence, hasModule, summarise, type Entitlement } from './licence';
 
 // Shared steward decisions API.
 //
@@ -16,6 +17,14 @@ export interface Env {
   FREEBUFF_CLIENT_ID: string;
   FREEBUFF_ISSUER?: string;
   APP_ORIGIN: string;
+  /** Signed licence token (compact JWS). Absent means evaluation mode. */
+  LICENCE_KEY?: string;
+  /** SPKI public key (base64url) that verifies LICENCE_KEY. Never the private key. */
+  LICENCE_PUBLIC_KEY?: string;
+  /** Optional key id; when set, the licence header must name it. */
+  LICENCE_KEY_ID?: string;
+  /** "true" turns a missing licence into a read-only install instead of an evaluation. */
+  LICENCE_REQUIRED?: string;
 }
 
 type Status = 'accepted' | 'dismissed';
@@ -114,6 +123,7 @@ let auth: FreebuffAuth | undefined;
 let handler: ((request: Request, env: Env) => Promise<Response>) | undefined;
 let handlerEnv: Env | undefined;
 let schemaReady: Promise<void> | undefined;
+let entitlementPromise: Promise<Entitlement> | undefined;
 
 function getAuth(env: Env): FreebuffAuth {
   auth ??= createFreebuffAuth({
@@ -124,6 +134,18 @@ function getAuth(env: Env): FreebuffAuth {
     allowInsecureLocalhost: /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(env.APP_ORIGIN),
   });
   return auth;
+}
+
+// Verification is deterministic for a given configuration, so it runs once per
+// isolate rather than on every request. Changing the licence means a redeploy.
+function getEntitlement(env: Env): Promise<Entitlement> {
+  entitlementPromise ??= evaluateLicence({
+    token: env.LICENCE_KEY,
+    publicKey: env.LICENCE_PUBLIC_KEY,
+    keyId: env.LICENCE_KEY_ID,
+    required: /^(true|1)$/i.test(env.LICENCE_REQUIRED ?? ''),
+  });
+  return entitlementPromise;
 }
 
 function ensureSchema(env: Env): Promise<void> {
@@ -326,6 +348,10 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     // The log carries actor identities, so it is as private as the backlog.
     const user = await authClient.getUser(request);
     if (!user) return json({ error: 'Sign in required' }, 401);
+    // The audit trail is a package feature, enforced here rather than in the UI.
+    if (!hasModule(await getEntitlement(env), 'audit-export')) {
+      return json({ error: 'The audit trail is not included in this licence' }, 403);
+    }
     return listHistory(env, url);
   }
 
@@ -335,6 +361,13 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     if (!isSameOriginRequest(request, env.APP_ORIGIN)) {
       return json({ error: 'Cross-origin request refused' }, 403);
     }
+    // Read-only is an installation state, not a user permission: no write from
+    // anyone should reach the database once the licence has lapsed.
+    const entitlement = await getEntitlement(env);
+    if (entitlement.readOnly) {
+      return json({ error: entitlement.reason ?? 'This installation is read-only' }, 403);
+    }
+
     const user = await authClient.getUser(request);
     if (!user) return json({ error: 'Sign in required' }, 401);
 
@@ -356,6 +389,12 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
 
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
+
+  if (url.pathname === '/api/licence' && request.method === 'GET') {
+    // Public: a banner about expiry is useful before anyone signs in, and this
+    // carries no customer identity — only status, modules and limits.
+    return json({ licence: summarise(await getEntitlement(env)) });
+  }
 
   if (url.pathname === '/api/me') {
     const user = await getAuth(env).getUser(request);

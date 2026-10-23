@@ -2,7 +2,8 @@ import { useMemo, type ReactNode } from 'react';
 import { snapshot } from '../data/seed';
 import type { DomainId } from '../types';
 import { signInHref, useDecisions } from '../lib/decisions';
-import { formatDate } from '../lib/util';
+import { isModuleLicensed, useLicence, type LicenceModule, type LicenceSummary } from '../lib/licence';
+import { formatDate, plural } from '../lib/util';
 import { Icon, type IconName } from './ui';
 
 export type View =
@@ -26,6 +27,23 @@ const VIEW_META: Record<View, { label: string; hint: string; icon: IconName }> =
 
 const ASSISTANT_VIEWS: View[] = ['catalog', 'quality', 'policy', 'access', 'planner'];
 
+// Which package module a screen belongs to. `null` means the screen is core and
+// is never withdrawn. The server enforces the same mapping on the API.
+const VIEW_MODULE: Record<View, LicenceModule | null> = {
+  overview: null,
+  history: 'audit-export',
+  catalog: 'catalog-curation',
+  quality: 'quality-triage',
+  policy: 'policy-qa',
+  access: 'access-review',
+  planner: 'stewardship-planner',
+};
+
+export function isViewLicensed(view: View, licence: LicenceSummary | null): boolean {
+  const module = VIEW_MODULE[view];
+  return module === null || isModuleLicensed(licence, module);
+}
+
 export function Shell({
   view,
   onNavigate,
@@ -40,6 +58,8 @@ export function Shell({
   children: ReactNode;
 }) {
   const { viewer, status, syncedAt, decisions } = useDecisions();
+  const { licence } = useLicence();
+  const assistants = ASSISTANT_VIEWS.filter((item) => isViewLicensed(item, licence));
   const initials = (viewer?.name ?? '')
     .split(' ')
     .filter(Boolean)
@@ -96,21 +116,23 @@ export function Shell({
             <Icon name="overview" size={15} className="nav-icon" />
             Overview
           </button>
-          <button
-            type="button"
-            className={`nav-item${view === 'history' ? ' active' : ''}`}
-            onClick={() => onNavigate('history')}
-            aria-current={view === 'history' ? 'page' : undefined}
-          >
-            <Icon name="clock" size={15} className="nav-icon" />
-            Decision history
-            <span className="nav-hint">{counts.history}</span>
-          </button>
+          {isViewLicensed('history', licence) ? (
+            <button
+              type="button"
+              className={`nav-item${view === 'history' ? ' active' : ''}`}
+              onClick={() => onNavigate('history')}
+              aria-current={view === 'history' ? 'page' : undefined}
+            >
+              <Icon name="clock" size={15} className="nav-icon" />
+              Decision history
+              <span className="nav-hint">{counts.history}</span>
+            </button>
+          ) : null}
         </nav>
 
         <nav className="nav-group" aria-label="Agent assistants">
           <div className="nav-label">Agent assistants</div>
-          {ASSISTANT_VIEWS.map((item) => (
+          {assistants.map((item) => (
             <button
               key={item}
               type="button"
@@ -146,6 +168,9 @@ export function Shell({
                 Sign out
               </button>
             </form>
+          ) : null}
+          {licence?.source === 'evaluation' ? (
+            <p className="licence-foot">Evaluation mode · no licence configured</p>
           ) : null}
           <p className="snapshot-note">
             Seeded catalog snapshot · {formatDate(snapshot.asOf)}. Agents reason over policies v4.2 and
@@ -183,6 +208,26 @@ export function Shell({
             </select>
           </div>
         </header>
+
+        {licence?.readOnly ? (
+          <div className="licence-banner licence-banner-blocked" role="status">
+            <Icon name="alert" size={15} />
+            <span>
+              <strong>Read-only.</strong> {licence.reason}
+            </span>
+          </div>
+        ) : licence?.status === 'active' &&
+          licence.daysRemaining !== null &&
+          licence.daysRemaining <= 30 ? (
+          <div className="licence-banner licence-banner-warn" role="status">
+            <Icon name="clock" size={15} />
+            <span>
+              Licence expires in {plural(licence.daysRemaining, 'day')}
+              {licence.notAfter ? ` (${formatDate(licence.notAfter.slice(0, 10))})` : ''}. Renew
+              before then to keep recording decisions.
+            </span>
+          </div>
+        ) : null}
 
         <main className="page">{children}</main>
       </div>

@@ -35,7 +35,34 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-function installApi(viewer = { id: 'u-1', name: 'Priya Raman' }) {
+const ALL_MODULE_IDS = [
+  'catalog-curation',
+  'quality-triage',
+  'policy-qa',
+  'access-review',
+  'stewardship-planner',
+  'audit-export',
+  'sso',
+];
+
+const ACTIVE_LICENCE = {
+  status: 'active',
+  source: 'licence',
+  readOnly: false,
+  packages: ['enterprise'],
+  modules: ALL_MODULE_IDS,
+  seats: 50,
+  workspaces: 25,
+  notAfter: '2027-10-22T23:59:59.000Z',
+  daysRemaining: 364,
+  reason: null,
+};
+
+function installApi(
+  licenceOverrides: Record<string, unknown> = {},
+  viewer = { id: 'u-1', name: 'Priya Raman' },
+) {
+  const licence = { ...ACTIVE_LICENCE, ...licenceOverrides };
   const rows = new Map<string, Row>();
   const events: LoggedEvent[] = [];
   const calls: { method: string; url: string; body?: Record<string, unknown> }[] = [];
@@ -48,6 +75,9 @@ function installApi(viewer = { id: 'u-1', name: 'Priya Raman' }) {
       typeof init?.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : undefined;
     calls.push({ method, url, ...(body ? { body } : {}) });
 
+    if (url === '/api/licence') {
+      return json({ licence });
+    }
     if (url === '/api/me') {
       return signedIn ? json({ user: viewer }) : json({ error: 'Sign in required' }, 401);
     }
@@ -142,15 +172,19 @@ function planItem(container: HTMLElement, title: string) {
 }
 
 async function renderPlanner(container: HTMLElement) {
-  const [{ act }, { createRoot }, store, { PlannerPage }] = await Promise.all([
+  const [{ act }, { createRoot }, store, licenceStore, { PlannerPage }] = await Promise.all([
     import('react'),
     import('react-dom/client'),
     import('../lib/decisions'),
+    import('../lib/licence'),
     import('./assistants/Planner'),
   ]);
   const root = createRoot(container);
   await act(async () => {
     root.render(<PlannerPage domainId="customer" onNavigate={() => {}} />);
+  });
+  await act(async () => {
+    await licenceStore.refreshLicence();
   });
   await act(async () => {
     await store.refreshDecisions();
@@ -433,6 +467,72 @@ describe('shared decision backlog in the browser', () => {
 
     await page.act(async () => {
       page.root.unmount();
+    });
+  });
+
+  it('goes read-only and withdraws the planner when the licence has lapsed', async () => {
+    const api = installApi({
+      status: 'expired',
+      readOnly: true,
+      daysRemaining: 0,
+      packages: ['professional'],
+      modules: ['catalog-curation', 'policy-qa', 'quality-triage', 'access-review', 'audit-export'],
+      reason:
+        'Licence expired on 20 Oct 2026. The workspace is read-only: decisions are refused until it is renewed, while reading and exporting stay available.',
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const { root, act } = await renderPlanner(container);
+
+    const bar = container.querySelector('.decision-bar');
+    expect(bar).toBeTruthy();
+    expect(bar!.textContent).toContain('Read-only');
+    expect(bar!.textContent).toContain('licence expired');
+    const buttons = Array.from(bar!.querySelectorAll('button')).map((button) =>
+      button.textContent?.trim(),
+    );
+    expect(buttons).not.toContain('Accept');
+    expect(buttons).not.toContain('Dismiss');
+    // Nothing was sent: the UI mirrors the server's refusal instead of trying.
+    expect(api.calls.filter((call) => call.method !== 'GET')).toHaveLength(0);
+
+    await act(async () => {
+      root.unmount();
+    });
+
+    // The shell states why, and a module outside the licence disappears from the nav.
+    const shellHost = document.createElement('div');
+    document.body.appendChild(shellHost);
+    const [{ createRoot }, { Shell }] = await Promise.all([
+      import('react-dom/client'),
+      import('./Shell'),
+    ]);
+    const shellRoot = createRoot(shellHost);
+    await act(async () => {
+      shellRoot.render(
+        <Shell
+          view="overview"
+          onNavigate={() => {}}
+          domainId="customer"
+          onDomainChange={() => {}}
+        >
+          <div />
+        </Shell>,
+      );
+    });
+
+    expect(shellHost.querySelector('.licence-banner-blocked')?.textContent).toContain(
+      'expired on 20 Oct 2026',
+    );
+    const navLabels = Array.from(shellHost.querySelectorAll('.nav-item')).map(
+      (item) => item.textContent ?? '',
+    );
+    expect(navLabels.some((label) => label.includes('Stewardship Plan'))).toBe(false);
+    expect(navLabels.some((label) => label.includes('Decision history'))).toBe(true);
+
+    await act(async () => {
+      shellRoot.unmount();
     });
   });
 });

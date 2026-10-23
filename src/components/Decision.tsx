@@ -8,6 +8,7 @@ import {
   signInHref,
   useDecisions,
 } from '../lib/decisions';
+import { useLicence } from '../lib/licence';
 import type { Decision, DecisionStatus, Person } from '../types';
 import { Icon } from './ui';
 
@@ -71,9 +72,13 @@ export function DecisionControls({
   hint?: string;
 }) {
   const { decisions, status, pending, error, viewer } = useDecisions();
+  const { licence } = useLicence();
   const decision = decisions[reference];
   const busy = pending.includes(reference);
-  const canDecide = status === 'ready';
+  // Recorded decisions stay visible when the licence lapses; recording new ones
+  // does not. The API refuses writes in the same state, so this only mirrors it.
+  const readOnly = Boolean(licence?.readOnly);
+  const canDecide = status === 'ready' && !readOnly;
   // Only the steward who recorded a decision may withdraw it; the server enforces
   // the same rule, so the control reflects it rather than failing after the click.
   const canWithdraw = Boolean(decision) && (!decision?.byId || decision.byId === viewer?.id);
@@ -87,7 +92,9 @@ export function DecisionControls({
     : undefined;
 
   return (
-    <div className={`decision-bar${decision ? ` decision-${decision.status}` : ''}`}>
+    <div
+      className={`decision-bar${decision ? ` decision-${decision.status}` : ''}${readOnly ? ' decision-bar-readonly' : ''}`}
+    >
       <div className="decision-state">
         <span className="decision-label">{label}</span>
         <span aria-live="polite">
@@ -100,7 +107,11 @@ export function DecisionControls({
             />
           ) : (
             <span className="tiny muted">
-              {status === 'signed-out' ? 'Sign in to record a decision' : 'Not reviewed'}
+              {readOnly
+                ? 'Read-only — no decision can be recorded'
+                : status === 'signed-out'
+                  ? 'Sign in to record a decision'
+                  : 'Not reviewed'}
             </span>
           )}
         </span>
@@ -115,7 +126,11 @@ export function DecisionControls({
             Retry
           </button>
         ) : null}
-        {status === 'signed-out' ? (
+        {readOnly ? (
+          <span className="decision-readonly">
+            Read-only — {licence?.status === 'expired' ? 'licence expired' : 'licence needs attention'}
+          </span>
+        ) : status === 'signed-out' ? (
           <a className="btn btn-sm btn-primary" href={signInHref()}>
             Sign in with Freebuff
           </a>
