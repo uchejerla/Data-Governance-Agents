@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "steward-desk",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-10-19",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    // /auth/freebuff/* must reach the Worker, not the asset server.
+    "run_worker_first": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "steward-desk",
+      "database_id": "00000000-0000-0000-0000-000000000001"
+    }
+  ]
+  // Client IDs and origins live in .dev.vars locally and are injected by the
+  // platform on deploy. Nothing here is a secret.
+}

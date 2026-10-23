@@ -1,0 +1,32 @@
+{
+  "name": "data-governance-agents",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Agent assistants that help data stewards deliver governance and stewardship work.",
+  "scripts": {
+    "dev": "vite",
+    "dev:worker": "wrangler dev --port 8787",
+    "build": "tsc -b && vite build",
+    "build:worker": "wrangler deploy --dry-run --outdir=worker-build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@freebuff/auth": "^0.1.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261022.1",
+    "@types/react": "^19.1.10",
+    "@types/react-dom": "^19.1.7",
+    "@vitejs/plugin-react": "^5.0.0",
+    "jsdom": "^30.1.3",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.3",
+    "vitest": "^3.2.4",
+    "wrangler": "^4.152.0"
+  }
+}
