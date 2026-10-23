@@ -25,11 +25,17 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          # The locked jsdom 30 needs >= 22.22 (Vite 7 needs >= 22.12); "22" resolves to
-          # the latest 22.x. The lockfile is committed, so CI installs exactly what
-          # development installed.
-          node-version: 22
+          # One pin for CI and developers: .nvmrc. A literal here could drift from
+          # the floor the suite actually needs, and the drift would only surface as
+          # a jsdom worker that never starts.
+          node-version-file: .nvmrc
           cache: npm
+
+      - name: Check the Node floor
+        # Runs the same guard as the `pretest` hook, before install. Without this,
+        # a runner below the floor fails later inside undici and the message is
+        # about the wrong file; here it is one line naming the version and .nvmrc.
+        run: node scripts/check-node.mjs
 
       - name: Install dependencies
         run: npm ci

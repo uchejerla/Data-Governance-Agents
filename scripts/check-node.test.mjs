@@ -49,4 +49,21 @@ describe('node floor', () => {
     // Dropping the hook is a one-line edit that restores the undici crash.
     expect(pkg.scripts.pretest).toBe('node scripts/check-node.mjs');
   });
+
+  it("takes CI's Node from .nvmrc and checks the floor before installing", () => {
+    const ci = read('.github/workflows/ci.yml');
+    // A literal version is a second copy of the floor that nothing compares to
+    // `.nvmrc`; setup-node reads the file developers already read.
+    expect(ci).toContain('node-version-file: .nvmrc');
+    expect(ci).not.toMatch(/node-version:/);
+
+    // The guard imports only `node:url`, so it can run before `npm ci`, where the
+    // message is worth reading. Run after the install, a below-floor runner offers
+    // only the undici crash from a dependency that never really executed.
+    const guard = ci.indexOf('node scripts/check-node.mjs');
+    const install = ci.indexOf('npm ci');
+    expect(guard).toBeGreaterThan(-1);
+    expect(install).toBeGreaterThan(-1);
+    expect(guard).toBeLessThan(install);
+  });
 });
