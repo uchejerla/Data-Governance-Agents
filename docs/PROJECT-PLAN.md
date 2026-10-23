@@ -137,7 +137,8 @@ annotated tag, so any checkpoint can be checked out and demonstrated.
    Checkpoint: CP5 — tenancy and seats
    ```
 4. Tag it: `git tag -a cp5 -m "CP5: tenancy and seats"`.
-5. Record the checkpoint in this file's status column and in `tasks/todo.md`.
+5. The annotated `cpn` tag is the checkpoint's status: `git tag -n` lists what has landed,
+   and the table above shows what remains. There is no separate board to fall out of sync.
 
 **A checkpoint may not be skipped or merged with another.** If a checkpoint fails its gate, the fix
 lands in the same checkpoint; a follow-up commit inside a checkpoint is fine, a weakened gate is not
