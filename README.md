@@ -1,7 +1,7 @@
 # Data Governance Agents
 
 [![CI](https://github.com/uchejerla/Data-Governance-Agents/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/uchejerla/Data-Governance-Agents/actions/workflows/ci.yml)
-![Node](https://img.shields.io/badge/node-%E2%89%A522.12-3c873a)
+![Node](https://img.shields.io/badge/node-%E2%89%A522.22-3c873a)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6)
 ![Status](https://img.shields.io/badge/status-pre--1.0-b45309)
 
@@ -65,7 +65,7 @@ steward records about it.
 
 ## Quickstart
 
-Requires Node **≥ 22.12** (Vite 7) and npm.
+Requires Node **≥ 22.22** (what the locked jsdom 30 needs) and npm.
 
 ```bash
 npm ci                 # install exactly what the lockfile pins
@@ -109,6 +109,7 @@ server-side session cookie) and serves:
 | `GET /api/decisions/history?limit=200&before=<id>` | The append-only event log, newest first, paged by event id, or 401 |
 | `PUT /api/decisions/:key` | Accept / dismiss / assign; same-origin only, validated, then upserted |
 | `DELETE /api/decisions/:key` | Withdraw your own decision (403 if someone else recorded it) |
+| `GET /api/licence` | The installation's entitlement: status, modules, seats and limits, or evaluation mode. Public, and carries no customer identity |
 
 Identity comes only from the verified session — no user id or email is ever accepted from the
 request body. Mutations must pass `isSameOriginRequest`, and personalised responses are
@@ -140,7 +141,7 @@ neutralised.
 ## Testing
 
 ```bash
-npm test           # 53 tests, 6 files
+npm test           # 73 tests, 8 files
 npm run typecheck  # tsc -b --noEmit, covers app, config and Worker projects
 ```
 
@@ -151,6 +152,8 @@ npm run typecheck  # tsc -b --noEmit, covers app, config and Worker projects
 | `src/lib/history.test.ts`, `csv.test.ts` | Key → wording resolution, log grouping, CSV quoting and formula hardening |
 | `src/components/decisions.dom.test.tsx` | The real components in jsdom: dismiss and accept, remount (a reload), plan and Markdown effects, history filtering, full-trail export |
 | `src/components/render.test.tsx` | Every screen renders its expected content |
+| `worker/licence.test.ts` | Verification against real ES256 tokens: tampering, the wrong key, a key id the install does not hold, invalid claims, expiry, not-yet-valid, seat counting and nested tiers |
+| `worker/routes.test.ts` | Where the Worker applies it, with a stubbed session: a read-only install refuses writes before authentication, a foreign `Origin` is refused, a package without the audit trail gets a 403 on history, and the public entitlement carries no customer identity |
 
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs typecheck and tests on every
 push to `main` from a clean `npm ci`.
@@ -183,6 +186,24 @@ deployment receipt is not proof the app works: check the HTML and asset content 
 the API when signed out, a 403 for a foreign `Origin`, then complete a real sign-in on the
 deployed origin.
 
+## Licensing
+
+Self-hosted installs are licensed per customer with a signed offline token. [docs/licensing.md](docs/licensing.md)
+has the packages, the token format and the issuing CLI (`npm run licence:issue`). The
+configuration is public, not secret:
+
+| Variable | Meaning |
+| --- | --- |
+| `LICENCE_KEY` | The signed token. Absent means evaluation mode. |
+| `LICENCE_PUBLIC_KEY` | SPKI public key that verifies the token. |
+| `LICENCE_KEY_ID` | Optional; pins the signing key. |
+| `LICENCE_REQUIRED` | `true` makes a missing licence read-only instead of an evaluation. |
+
+`GET /api/licence` returns the entitlement the shell filters screens with. The Worker,
+not the browser, enforces expiry — writes are refused and reads and export keep working —
+and the audit-trail module. Seats are modelled and returned but not enforced, because
+there is no membership table yet.
+
 ## Project layout
 
 ```
@@ -191,6 +212,7 @@ src/types.ts            Domain model: domains, assets, terms, rules, policy clau
 src/data/seed.ts        Seeded snapshot of a mid-sized insurer's governance estate (dates relative to load)
 worker/                 The only server: auth-wrapped fetch handler, decisions API, D1 schema
   index.ts
+  licence.ts            Licence verification and entitlement evaluation (no bindings, portable)
 wrangler.jsonc          Local Worker config: assets, D1 binding, worker-first routing
 deploy.json             Sites deployment manifest (prebuilt Worker bundle + dist/)
 .github/workflows/      CI: typecheck and tests on every push to main
@@ -203,7 +225,9 @@ src/lib/                The engines — pure functions, no React, no I/O
   policy.ts             Clause retrieval, coverage assessment, grounded answer composition
   access.ts             Access decision rules and reviewer note
   planner.ts            Cross-source backlog harvest, prioritisation, capacity check
+  licence.ts            Client half of licensing: one entitlement fetch, the store the shell reads
   util.ts               Dates, business days, pluralisation, formatting
+scripts/issue-licence.mjs  Generates a signing key and signs a licence (docs/licensing.md)
 src/components/         App shell, design system primitives, one screen per assistant
   Decision.tsx          Accept / dismiss / assign controls and status chips
   History.tsx           Decision history: the audit trail, grouped per recommendation
@@ -241,7 +265,10 @@ Honest list, because the demo is easy to mistake for a finished product:
   browser in this build.
 - **One workspace.** There is no tenant column; every signed-in steward shares one backlog.
 - **Identity is Freebuff**, not an enterprise IdP. SSO is not wired.
-- **No licensing, packages or expiry.** All five assistants are always available.
+- **Licensing is a commercial control, not DRM.** Expiry and the audit trail are enforced by
+  the Worker; seats are modelled but not counted, and module gating for the browser-rendered
+  assistants is a UI filter until the snapshot moves behind the API. [docs/licensing.md](docs/licensing.md)
+  has the enforcement matrix and the honest limits.
 - **No application-level rate limiting** beyond the platform's.
 - **Advisory only.** It recommends; it never approves access, edits metadata or changes a rule.
 
@@ -249,9 +276,8 @@ Honest list, because the demo is easy to mistake for a finished product:
 
 - **Self-hosted distribution**: Node + Postgres build, container image, migrations, health and
   version endpoints — the shape enterprise data-governance teams can run in their own cloud.
-- **Licensing and packages**: signed offline licence (modules, seats, expiry), server-side gates,
-  expiry to read-only rather than lockout, with the same entitlement interface ready for a SaaS
-  provider later.
+- **Seat and workspace enforcement**: both already travel in the licence token, but seats need a
+  membership table to count against and workspaces need a tenant column.
 - **SSO per install**: OIDC/SAML with group → role mapping, configured in admin settings.
 - **Connectors**: Collibra / Purview / Alation for catalog, dbt or Great Expectations for quality,
   a policy store for clauses — served as a per-workspace snapshot.

@@ -5,7 +5,7 @@ change accepted is to keep it inside them.
 
 ## Setup
 
-Requires Node **≥ 22.12** and npm.
+Requires Node **≥ 22.22** and npm.
 
 ```bash
 npm ci                                  # exact dependencies from the lockfile
@@ -54,6 +54,9 @@ Add tests with the change, not after it:
   using the `stubApi` helper, asserting what the client sent *and* what it did with the reply.
 - **Interaction that persists** — dismiss/accept/assign/expiry flows belong in
   `src/components/decisions.dom.test.tsx`, which drives the real components in jsdom.
+- **Worker gates** — auth, origin and licence enforcement on a route belongs in
+  `worker/routes.test.ts` (stub `@freebuff/auth` and the D1 binding); licence verification
+  itself lives in `worker/licence.test.ts`.
 - **CSV** — escaping and formula handling live in `src/lib/csv.test.ts`.
 
 Before pushing: `npm run typecheck && npm test`. CI runs both on every push to `main` from a

@@ -19,8 +19,9 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          # Vite 7 needs >= 22.12; the lockfile is committed, so CI installs exactly
-          # what development installed.
+          # The locked jsdom 30 needs >= 22.22 (Vite 7 needs >= 22.12); "22" resolves to
+          # the latest 22.x. The lockfile is committed, so CI installs exactly what
+          # development installed.
           node-version: 22
           cache: npm
 
