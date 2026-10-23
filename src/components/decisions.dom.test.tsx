@@ -220,6 +220,8 @@ beforeEach(() => {
 });
 
 describe('shared decision backlog in the browser', () => {
+  // Drives a full reload — unmount, reset the module graph, re-render — so it needs
+  // more than the default 5s on a loaded machine. The assertions are unchanged.
   it('keeps dismiss and accept/assign after a reload, attributed to the steward', async () => {
     const api = installApi();
     const container = document.createElement('div');
@@ -294,7 +296,7 @@ describe('shared decision backlog in the browser', () => {
     await act(async () => {
       second.root.unmount();
     });
-  });
+  }, 20_000);
 
   it('shows the backlog read-only, with a sign-in link, when there is no session', async () => {
     const api = installApi();

@@ -137,3 +137,148 @@ describe('constraint floor guard', () => {
     expect(result.stderr).toContain('no merge base');
   });
 });
+
+// A count that goes up is the ratchet working, not a move to reach green. These
+// tests cover the reads that tell the two apart, so raising a documented number
+// stays silent while every way of lowering one still blocks.
+describe('threshold direction', () => {
+  const floor = (rule) =>
+    [
+      '# Constraints',
+      '',
+      '| Dimension | Rule | Checked by | Runs at |',
+      '| --- | --- | --- | --- |',
+      `| Tests | ${rule} | \`npm test\` | CI |`,
+      '',
+    ].join('\n');
+
+  const measured = (today, direction) =>
+    [
+      '# Constraints',
+      '',
+      '| Metric | Today | Direction |',
+      '| --- | --- | --- |',
+      `| Tests | ${today} | ${direction} |`,
+      '',
+    ].join('\n');
+
+  it('lets a raised floor through', () => {
+    const dir = makeRepo({ ...BASE_FILES, 'CONSTRAINTS.md': floor('At least 73 tests pass') });
+    writeFileSync(join(dir, 'CONSTRAINTS.md'), floor('At least 91 tests pass'));
+    const result = runGuard(dir);
+    expect(result.code).toBe(0);
+  });
+
+  it('still blocks the same floor going down', () => {
+    const dir = makeRepo({ ...BASE_FILES, 'CONSTRAINTS.md': floor('At least 91 tests pass') });
+    writeFileSync(join(dir, 'CONSTRAINTS.md'), floor('At least 73 tests pass'));
+    const result = runGuard(dir);
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('threshold-loosened');
+  });
+
+  it('reads a direction word written in the cell beside the number', () => {
+    const dir = makeRepo({
+      ...BASE_FILES,
+      'CONSTRAINTS.md': measured('81 passing, 9 files', 'must not fall'),
+    });
+    writeFileSync(join(dir, 'CONSTRAINTS.md'), measured('91 passing, 9 files', 'must not fall'));
+    expect(runGuard(dir).code).toBe(0);
+
+    writeFileSync(join(dir, 'CONSTRAINTS.md'), measured('60 passing, 9 files', 'must not fall'));
+    const lowered = runGuard(dir);
+    expect(lowered.code).toBe(1);
+    expect(lowered.stderr).toContain('threshold-loosened');
+  });
+
+  it('pairs two rows that share a label by position, not by first match', () => {
+    // Both are called `Tests`; a first-match pairing compares the measured row
+    // against the floor row and calls a rise a loosening.
+    const both = (floorRule, today) =>
+      [floor(floorRule), measured(today, 'must not fall')].join('\n');
+    const dir = makeRepo({
+      ...BASE_FILES,
+      'CONSTRAINTS.md': both('At least 73 tests pass', '95 passing, 9 files'),
+    });
+    writeFileSync(
+      join(dir, 'CONSTRAINTS.md'),
+      both('At least 91 tests pass', '101 passing, 9 files'),
+    );
+    const result = runGuard(dir);
+    expect(result.code).toBe(0);
+  });
+
+  it('blocks a threshold that is deleted even though the row survives', () => {
+    const row = (rule) =>
+      [
+        '# Constraints',
+        '',
+        '| Metric | Today | Direction |',
+        '| --- | --- | --- |',
+        `| Bundle | ${rule} | must not grow |`,
+        '',
+      ].join('\n');
+    const dir = makeRepo({ ...BASE_FILES, 'CONSTRAINTS.md': row('390.73 kB (117.55 kB gzip)') });
+    writeFileSync(join(dir, 'CONSTRAINTS.md'), row('small enough, gzip too'));
+    const result = runGuard(dir);
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('threshold-removed');
+  });
+
+  it('ignores numbers in the cells beside the threshold', () => {
+    // `CI from CP2` is a checkpoint, not a threshold: rewording the row must not
+    // read as a number being removed.
+    const row = (rule, runsAt) =>
+      [
+        '# Constraints',
+        '',
+        '| Dimension | Rule | Checked by | Runs at |',
+        '| --- | --- | --- | --- |',
+        `| Dependencies | ${rule} | \`npm audit --audit-level=high\` | ${runsAt} |`,
+        '',
+      ].join('\n');
+    const dir = makeRepo({
+      ...BASE_FILES,
+      'CONSTRAINTS.md': row('No high or critical advisory reachable at runtime', 'CI from CP2'),
+    });
+    writeFileSync(
+      join(dir, 'CONSTRAINTS.md'),
+      row('Nothing at high or above, runtime or development', 'every change, CI'),
+    );
+    expect(runGuard(dir).code).toBe(0);
+  });
+
+  it('still reports a change it cannot read a direction from', () => {
+    const row = (value) =>
+      [
+        '# Constraints',
+        '',
+        '| Metric | Today | Direction |',
+        '| --- | --- | --- |',
+        `| Coverage | ${value} | recorded by hand |`,
+        '',
+      ].join('\n');
+    const dir = makeRepo({ ...BASE_FILES, 'CONSTRAINTS.md': row('80% of lines') });
+    writeFileSync(join(dir, 'CONSTRAINTS.md'), row('70% of lines'));
+    const result = runGuard(dir);
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('threshold-changed');
+  });
+
+  it('blocks a floor that flips into a ceiling', () => {
+    const row = (rule) =>
+      [
+        '# Constraints',
+        '',
+        '| Metric | Today | Direction |',
+        '| --- | --- | --- |',
+        `| Budget | ${rule} | fixed |`,
+        '',
+      ].join('\n');
+    const dir = makeRepo({ ...BASE_FILES, 'CONSTRAINTS.md': row('at most 400 kB') });
+    writeFileSync(join(dir, 'CONSTRAINTS.md'), row('at least 300 kB'));
+    const result = runGuard(dir);
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('threshold-changed');
+  });
+});

@@ -13,6 +13,8 @@ import type { Env } from './index';
 const state = vi.hoisted(() => ({
   user: null as { sub: string; name?: string; email?: string } | null,
   getUserCalls: 0,
+  /** Set to stand in for an auth redirect, to prove its cookie survives hardening. */
+  authResponse: null as Response | null,
 }));
 
 vi.mock('@freebuff/auth', () => ({
@@ -21,10 +23,13 @@ vi.mock('@freebuff/auth', () => ({
       state.getUserCalls += 1;
       return state.user;
     },
-    // The real wrapper handles /auth/* and then calls the route. These tests only
-    // cover /api/*, so the identity wrapper is the whole contract.
+    // The real wrapper handles /auth/* and then calls the route. These tests cover
+    // /api/* and, when a test supplies one, an auth redirect.
     wrap: (route: (request: Request, env: unknown) => Promise<Response>) =>
-      (request: Request, env: unknown) => route(request, env),
+      (request: Request, env: unknown) =>
+        state.authResponse && request.url.includes('/auth/')
+          ? state.authResponse
+          : route(request, env),
   }),
   isSameOriginRequest: (request: Request, origin: string) =>
     request.headers.get('origin') === origin,
@@ -119,7 +124,12 @@ function makeDb() {
 
 function makeEnv(db: ReturnType<typeof makeDb>, licence: Record<string, string> = {}): Env {
   return {
-    ASSETS: { fetch: async () => new Response('asset') },
+    ASSETS: {
+      fetch: async () =>
+        new Response('<!doctype html><div id="root"></div>', {
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        }),
+    },
     DB: db,
     FREEBUFF_CLIENT_ID: 'test-client',
     APP_ORIGIN,
@@ -148,6 +158,7 @@ function historyRequest() {
 beforeEach(() => {
   state.user = null;
   state.getUserCalls = 0;
+  state.authResponse = null;
 });
 
 describe('licence endpoints', () => {
@@ -263,5 +274,88 @@ describe('audit-trail module gate', () => {
     const response = await callWorker(env, historyRequest());
 
     expect(response.status).toBe(401);
+  });
+});
+
+describe('response hardening', () => {
+  it('sends the security headers with an API response and keeps the cache policy', async () => {
+    const env = makeEnv(makeDb(), await expiredLicence());
+
+    const response = await callWorker(env, new Request(`${APP_ORIGIN}/api/licence`));
+
+    const csp = response.headers.get('content-security-policy');
+    expect(csp).toContain("default-src 'self'");
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("object-src 'none'");
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(response.headers.get('x-frame-options')).toBe('DENY');
+    expect(response.headers.get('referrer-policy')).toBe('strict-origin-when-cross-origin');
+    expect(response.headers.get('strict-transport-security')).toContain('max-age=31536000');
+    expect(response.headers.get('permissions-policy')).toContain('camera=()');
+    // The route's own headers survive the hardening wrapper.
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+  });
+
+  it('hardens static assets as well as the API', async () => {
+    const env = makeEnv(makeDb());
+
+    const response = await callWorker(env, new Request(`${APP_ORIGIN}/`));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/html');
+    expect(response.headers.get('content-security-policy')).toContain("default-src 'self'");
+  });
+
+  it('keeps the session cookie when it hardens an auth redirect', async () => {
+    const env = makeEnv(makeDb());
+    state.authResponse = new Response(null, {
+      status: 302,
+      headers: {
+        location: '/',
+        'set-cookie': 'session=abc123; HttpOnly; Secure; SameSite=Lax',
+      },
+    });
+
+    const response = await callWorker(env, new Request(`${APP_ORIGIN}/auth/freebuff/signin`));
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe('/');
+    expect(response.headers.get('set-cookie')).toContain('session=abc123');
+    expect(response.headers.get('content-security-policy')).toContain("default-src 'self'");
+  });
+
+  it('hardens a bodiless response without inventing a body', async () => {
+    const env = {
+      ...makeEnv(makeDb()),
+      ASSETS: { fetch: async () => new Response(null, { status: 304 }) },
+    } as Env;
+
+    const response = await callWorker(env, new Request(`${APP_ORIGIN}/`));
+
+    expect(response.status).toBe(304);
+    expect(response.body).toBeNull();
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+  });
+});
+
+describe('error handling', () => {
+  it('turns an unexpected failure into a generic 500, not an internal detail', async () => {
+    const env = {
+      ...makeEnv(makeDb()),
+      ASSETS: {
+        fetch: async () => {
+          throw new Error('binding DB is not configured at /var/secret/path');
+        },
+      },
+    } as Env;
+
+    const response = await callWorker(env, new Request(`${APP_ORIGIN}/`));
+
+    expect(response.status).toBe(500);
+    const body = (await response.json()) as { error: string };
+    expect(body.error).toBe('Something went wrong');
+    expect(JSON.stringify(body)).not.toContain('secret');
+    // The hardening wrapper runs on failures too.
+    expect(response.headers.get('content-security-policy')).toContain("default-src 'self'");
   });
 });

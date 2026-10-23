@@ -115,6 +115,51 @@ const HEADERS = {
   'Cache-Control': 'private, no-store',
 };
 
+// Security headers on every response, assets and auth redirects included — a page
+// that is framed or sniffed is as exposed as one that leaks a stack trace.
+//
+// The CSP is the strict default for this app: same-origin scripts, no framing, no
+// plugins, forms back to ourselves. Inline styles are allowed because React writes
+// `style` attributes; a change that needs a new origin has to widen this on purpose.
+const SECURITY_HEADERS: Record<string, string> = {
+  'Content-Security-Policy': [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data:",
+    "font-src 'self'",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join('; '),
+  // Ignored by browsers on a plain-http origin, so local development is unaffected.
+  'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+  'X-Content-Type-Options': 'nosniff',
+  // Legacy companion to frame-ancestors for clients that do not read CSP.
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+};
+
+/**
+ * Copy a response so the security headers can be added without losing what the
+ * route set (content type, cache control, and the session cookie on a sign-in).
+ * A 204 or 304 must not carry a body, and a Response constructed with a stream for
+ * one of those throws.
+ */
+function withSecurityHeaders(response: Response): Response {
+  const headers = new Headers(response.headers);
+  for (const [name, value] of Object.entries(SECURITY_HEADERS)) headers.set(name, value);
+  const body = response.status === 204 || response.status === 304 ? null : response.body;
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: HEADERS });
 }
@@ -420,13 +465,20 @@ async function route(request: Request, env: Env): Promise<Response> {
 }
 
 export default {
-  fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env): Promise<Response> {
     const authClient = getAuth(env);
     if (handlerEnv !== env) {
       // One wrapped handler per isolate: auth caches discovery and signing keys.
       handler = authClient.wrap((req: Request, innerEnv: Env) => route(req, innerEnv));
       handlerEnv = env;
     }
-    return handler!(request, env);
+    try {
+      return withSecurityHeaders(await handler!(request, env));
+    } catch (error) {
+      // Internals go to the platform log; the client gets a generic body so a stack
+      // trace, a SQL string or a binding name never reaches the browser.
+      console.error('Unhandled request error', error);
+      return withSecurityHeaders(json({ error: 'Something went wrong' }, 500));
+    }
   },
 };

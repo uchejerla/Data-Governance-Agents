@@ -147,35 +147,60 @@ for (const { file: target, text } of removed) {
 }
 
 // A rule in CONSTRAINTS.md is a floor bullet or a table row, keyed by the text
-// before its first colon or by the row's first cell. Numbers carry a direction
-// from the words around them: a minimum loosens by going down, a maximum by going
-// up, and a number whose direction cannot be read is reported when it changes.
+// before its first colon or by the row's first cell. A row's thresholds are the
+// numbers in its value column — `Rule` in the floor table, `Today` in the measured
+// one — not the tool names, versions and checkpoint ids in the cells beside it.
+const rowCells = (text) => text.trim().split('|').map((cell) => cell.trim());
+
 const ruleKey = (text) => {
   const line = text.trim();
-  if (line.startsWith('|')) return line.split('|').map((cell) => cell.trim()).filter(Boolean)[0] ?? '';
+  if (line.startsWith('|')) return rowCells(line).filter(Boolean)[0] ?? '';
   if (/^[-*] /.test(line)) return line.slice(2).split(':')[0].trim();
   return null;
 };
 const isExceptionRow = (text) => /^\|\s*(W|E)\d+\s*\|/.test(text.trim());
-const MIN_BEFORE = /(>=|>|≥|at least|minimum|\bmin\b|no less than|not fall|not drop)\s*$/;
-const MAX_BEFORE = /(<=|<|≤|at most|maximum|\bmax\b|no more than|under|below|not grow|not exceed)\s*$/;
-const MIN_AFTER = /^\s*\S*\s*(or more|or higher|must not fall|must not drop)/;
-const MAX_AFTER = /^\s*\S*\s*(or less|or lower|must not grow|must not exceed)/;
+
+// Direction is read from the whole row, so `must not fall` written in a Direction
+// column governs a number two cells away. A row that says nothing is checked for
+// words beside each number instead. A minimum loosens by going down, a maximum by
+// going up, and a number whose direction cannot be read is reported when it moves.
+const MIN_WORDS =
+  /(>=|≥|\bat least\b|\bminimum\b|\bmin\b|no less than|must not fall|must not drop|or more|or higher)/i;
+const MAX_WORDS =
+  /(<=|≤|\bat most\b|\bmaximum\b|\bmax\b|no more than|\bunder\b|\bbelow\b|must not grow|must not exceed|or less|or lower)/i;
+const MIN_BEFORE = /(>=|≥|at least|minimum|\bmin\b|no less than|must not fall|must not drop)\s*$/i;
+const MAX_BEFORE = /(<=|≤|at most|maximum|\bmax\b|no more than|under|below|must not grow|must not exceed)\s*$/i;
+const MIN_AFTER = /^\s*\S*\s*(or more|or higher|must not fall|must not drop)/i;
+const MAX_AFTER = /^\s*\S*\s*(or less|or lower|must not grow|must not exceed)/i;
+
+const rowDirection = (text) => {
+  const minimum = MIN_WORDS.test(text);
+  const maximum = MAX_WORDS.test(text);
+  return minimum && !maximum ? 'min' : maximum && !minimum ? 'max' : null;
+};
+
+const thresholdText = (text) => {
+  const line = text.trim();
+  if (!line.startsWith('|')) return line;
+  return rowCells(line).filter(Boolean)[1] ?? '';
+};
 
 const thresholds = (text) => {
+  const cell = thresholdText(text);
+  const directionOfRow = rowDirection(text);
   const out = [];
   const pattern = /\d+(?:\.\d+)?/g;
   let match;
-  while ((match = pattern.exec(text))) {
-    const before = text.slice(Math.max(0, match.index - 24), match.index).toLowerCase();
-    const after = text
-      .slice(match.index + match[0].length, match.index + match[0].length + 40)
-      .toLowerCase();
-    const direction = MIN_BEFORE.test(before) || MIN_AFTER.test(after)
-      ? 'min'
-      : MAX_BEFORE.test(before) || MAX_AFTER.test(after)
-        ? 'max'
-        : null;
+  while ((match = pattern.exec(cell))) {
+    const before = cell.slice(Math.max(0, match.index - 24), match.index);
+    const after = cell.slice(match.index + match[0].length, match.index + match[0].length + 40);
+    const direction =
+      directionOfRow ??
+      (MIN_BEFORE.test(before) || MIN_AFTER.test(after)
+        ? 'min'
+        : MAX_BEFORE.test(before) || MAX_AFTER.test(after)
+          ? 'max'
+          : null);
     out.push({ value: Number(match[0]), direction });
   }
   return out;
@@ -184,8 +209,21 @@ const thresholds = (text) => {
 const removedRules = removed.filter((line) => isConstraints(line.file) && ruleKey(line.text) !== null);
 const addedRules = added.filter((line) => isConstraints(line.file) && ruleKey(line.text) !== null);
 
+// Two rows can share a label — `Tests` appears in the floor table and again in the
+// measured one — so pair them by order of appearance within the diff rather than by
+// first match, which would compare a measured row against the floor row.
+const addedByKey = new Map();
+for (const line of addedRules) {
+  const key = ruleKey(line.text);
+  addedByKey.set(key, [...(addedByKey.get(key) ?? []), line]);
+}
+const seenByKey = new Map();
+
 for (const rule of removedRules) {
-  const replacement = addedRules.find((candidate) => ruleKey(candidate.text) === ruleKey(rule.text));
+  const key = ruleKey(rule.text);
+  const occurrence = seenByKey.get(key) ?? 0;
+  seenByKey.set(key, occurrence + 1);
+  const replacement = addedByKey.get(key)?.[occurrence];
   if (!replacement) {
     // Dropping an exception tightens the bar, so it stays silent.
     if (!isExceptionRow(rule.text)) flag('rule-removed', rule.file, rule.text);
@@ -196,26 +234,27 @@ for (const rule of removedRules) {
   const after = thresholds(replacement.text);
   let verdict = null;
 
-  for (const direction of ['min', 'max', null]) {
-    const was = before.filter((entry) => entry.direction === direction);
-    const now = after.filter((entry) => entry.direction === direction);
-    was.forEach((entry, index) => {
-      if (verdict) return;
-      const next = now[index];
-      if (!next) {
-        verdict = 'threshold-removed';
-      } else if (next.value === entry.value) {
-        return;
-      } else if (
-        direction === 'min'
-          ? next.value < entry.value
-          : direction === 'max'
-            ? next.value > entry.value
-            : true
-      ) {
-        verdict = direction ? 'threshold-loosened' : 'threshold-changed';
-      }
-    });
+  for (let index = 0; index < Math.max(before.length, after.length) && !verdict; index += 1) {
+    const was = before[index];
+    const now = after[index];
+    if (!now) {
+      // A number that never carried a direction was not a readable threshold, so a
+      // rewrite that drops it is not a removal. One that did carry a direction is.
+      if (was.direction) verdict = 'threshold-removed';
+      continue;
+    }
+    if (!was) continue; // adding a threshold tightens the bar.
+    if (now.value === was.value) continue;
+    if (now.direction === null) {
+      // The new line lost its direction words, so a fall can still be read as a
+      // fall; anything else needs a human.
+      verdict =
+        was.direction === 'min' && now.value < was.value ? 'threshold-loosened' : 'threshold-changed';
+    } else if (was.direction !== null && was.direction !== now.direction) {
+      verdict = 'threshold-changed';
+    } else if (now.direction === 'min' ? now.value < was.value : now.value > was.value) {
+      verdict = 'threshold-loosened';
+    }
   }
 
   if (verdict) flag(verdict, rule.file, `${rule.text}  ->  ${replacement.text}`);

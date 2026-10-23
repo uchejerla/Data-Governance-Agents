@@ -34,6 +34,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Audit dependencies
+        # Nothing at high or above, runtime or development: the test runner also
+        # executes on a pull request. A deferral needs a row in CONSTRAINTS.md.
+        run: npm audit --audit-level=high
+
       - name: Typecheck
         run: npm run typecheck
 

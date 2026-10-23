@@ -1,0 +1,14 @@
+# One maintainer today, so every path needs their review. Branch protection is what
+# makes the review required; this file decides who is asked.
+#
+# The paths that matter most, and why they are listed here rather than as separate
+# rules — the blanket rule already covers them, and the day a second reviewer joins
+# these move into their own lines:
+#
+#   /CONSTRAINTS.md              the bar itself
+#   /scripts/check-constraints.mjs  the guard that enforces it
+#   /.github/                    CI, templates, dependency policy
+#   /worker/                     auth, decisions API, D1, licensing gates
+#   /docs/licensing.md, /scripts/issue-licence.mjs   the commercial control
+
+* @uchejerla

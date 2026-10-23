@@ -141,7 +141,7 @@ neutralised.
 ## Testing
 
 ```bash
-npm test           # 81 tests, 9 files
+npm test           # 99 tests, 9 files
 npm run typecheck  # tsc -b --noEmit, covers app, config and Worker projects
 npm run check      # typecheck, tests and the constraint floor — what CI runs
 ```
@@ -162,6 +162,9 @@ push to `main` from a clean `npm ci`.
 
 ## Security and data handling
 
+- Every response carries a strict CSP (`default-src 'self'`, no framing, no plugins), HSTS,
+  `nosniff`, a referrer policy and a permissions policy — static assets and auth redirects included.
+- Unexpected errors return a generic 500 with those headers; the detail stays in the platform log.
 - Identity is established by OIDC and read only from the session cookie; writes are
   same-origin-checked and validated server-side.
 - The audit log records actor id, name and email; responses carrying it are `private, no-store`.

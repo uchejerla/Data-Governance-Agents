@@ -24,18 +24,23 @@ Checked by `scripts/check-constraints.mjs`, which diffs the branch against its m
 a rule and a location, never a matched value. Exit `1` blocks the change; exit `2` means the guard
 could not run and never counts as clean.
 
+Numbers in a rule carry a direction — `at least`, `must not fall`, `must not grow`. Raising a floor
+or lowering a ceiling is silent; the reverse blocks the change, and a number whose direction cannot
+be read is reported whenever it moves.
+
 ## Enforced with numbers
 
 | Dimension | Rule | Checked by | Runs at |
 | --- | --- | --- | --- |
 | Types | Zero type errors, app + config + Worker | `npm run typecheck` (`tsc -b --noEmit`) | every edit, CI |
-| Tests | All tests pass: **81 in 9 files** | `npm test` (`vitest run`) | every edit, CI |
+| Tests | All tests pass, at least **99 in 9 files** | `npm test` (`vitest run`) | every edit, CI |
 | Floor | No move that lowers the bar | `npm run check:constraints` | every task, CI |
 | Worker gates | Licence, origin and auth enforcement covered | `worker/routes.test.ts` | every edit, CI |
 | Build | Production bundle builds | `npm run build` | checkpoint, CI |
 | Node | **≥ 22.22** (locked jsdom 30 requirement) | `node -v` | setup |
 | Secrets | No credential material staged | staged-diff scan in the PR checklist | every commit |
-| Dependencies | No high or critical advisory reachable at runtime | `npm audit --audit-level=high` | CI from CP2 |
+| Dependencies | Nothing at high or above, runtime or development | `npm audit --audit-level=high` | every change, CI |
+| Response headers | CSP, HSTS, `nosniff`, no framing, permissions policy on every response | `worker/routes.test.ts` | every edit, CI |
 
 ## Measured, not yet enforced
 
@@ -43,16 +48,17 @@ Ratchet only: these must not get worse. Update the recorded value when it improv
 
 | Metric | Today (2026-10-23) | Direction |
 | --- | --- | --- |
-| Tests | 81 passing, 9 files | must not fall |
+| Tests | 99 passing, 9 files | must not fall |
 | Bundle, main JS | 390.73 kB (117.55 kB gzip) | must not grow without a stated reason |
 | Bundle, CSS | 22.38 kB (5.37 kB gzip) | must not grow without a stated reason |
 | Type coverage | `strict` on, zero `any` in `src/lib` at review time | must not regress |
 | Test coverage | not measured yet | measure at CP3, then hold |
-| Dependency advisories | 3 (2 critical, 1 moderate) via `vitest → tinypool` / `@vitest/mocker`, development-only | **must reach 0 at CP2** |
+| Dependency advisories | 0 | must not grow |
 
-The three advisories are dev-time (test runner), not in `dist/` or the Worker bundle, so they are not
-a runtime exposure; they are a CI exposure and block the audit gate until the vitest 5 upgrade lands
-at CP2. Forced remediation is never applied automatically.
+The advisory count is a hard gate now that the vitest 5 upgrade has landed: it stood at 3 (2
+critical, 1 moderate) through `vitest → tinypool` / `@vitest/mocker`, and vitest 5 cleared all
+three. Forced remediation (`npm audit fix --force`) is never applied automatically: read the
+advisory, decide the upgrade, and prove the suite still passes.
 
 ## Exceptions
 
